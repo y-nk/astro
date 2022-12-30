@@ -26,7 +26,7 @@ async function createViteLoader(root: string, fs: typeof fsType): Promise<ViteLo
 			// NOTE: Vite doesn't externalize linked packages by default. During testing locally,
 			// these dependencies trip up Vite's dev SSR transform. In the future, we should
 			// avoid `vite.createServer` and use `loadConfigFromFile` instead.
-			external: ['@astrojs/tailwind', '@astrojs/mdx', '@astrojs/react'],
+			external: ['@astrojs/tailwind', '@astrojs/mdx', '@astrojs/react', '@astrojs/sitemap'],
 		},
 		plugins: [loadFallbackPlugin({ fs, root: pathToFileURL(root) })],
 	});
@@ -126,18 +126,28 @@ export async function loadConfigWithVite({
 			value: mod.default ?? {},
 			filePath: file,
 		};
-	} catch {
+	} catch (viteError) {
 		// Try loading with Proload
 		// TODO deprecate - this is only for legacy compatibility
-		const res = await load('astro', {
-			mustExist: true,
-			cwd: root,
-			filePath: file,
-		});
-		return {
-			value: res?.value ?? {},
-			filePath: file,
-		};
+		try {
+			const res = await load('astro', {
+				mustExist: true,
+				cwd: root,
+				filePath: file,
+			});
+			return {
+				value: res?.value ?? {},
+				filePath: file,
+			};
+		} catch (proloadError) {
+			// eslint-disable-next-line no-console
+			console.error('Failed to load with Vite:');
+			// eslint-disable-next-line no-console
+			console.error(viteError);
+			// eslint-disable-next-line no-console
+			console.error('Failed to load with Proload:');
+			throw proloadError;
+		}
 	} finally {
 		if (loader) {
 			await loader.viteServer.close();
